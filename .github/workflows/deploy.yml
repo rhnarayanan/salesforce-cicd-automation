@@ -62,6 +62,7 @@ jobs:
 
       - name: Validate Asset URL
         run: |
+          echo "Validating asset URL..."
           if [ -z "${{ steps.fetch_asset.outputs.result }}" ]; then
             echo "Error: Asset URL is empty. Ensure the release and asset name are correct."
             exit 1
@@ -72,7 +73,9 @@ jobs:
       - name: Download Release Asset
         run: |
           echo "Downloading asset..."
-          curl -L -o ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip '${{ steps.fetch_asset.outputs.result }}'
+          curl -L -o ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip ${{
+            steps.fetch_asset.outputs.result
+          }}
           mkdir -p deployment
           unzip ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip -d deployment
           ls -la deployment
