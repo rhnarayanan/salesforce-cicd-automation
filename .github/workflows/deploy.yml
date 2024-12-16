@@ -41,8 +41,12 @@ jobs:
 
             const release = releases.data.find(r => r.tag_name === releaseName);
             if (!release) {
+              console.log('Available Releases:');
+              releases.data.forEach(r => console.log(`- ${r.tag_name}`));
               throw new Error(`Release with tag "${releaseName}" not found.`);
             }
+
+            console.log(`Found Release: ${release.tag_name}`);
 
             // Find the matching asset in the release
             const asset = release.assets.find(a => a.name === assetName);
@@ -53,7 +57,17 @@ jobs:
             }
 
             console.log(`Found Asset: ${asset.name}`);
+            console.log(`Asset URL: ${asset.browser_download_url}`);
             return asset.browser_download_url;
+
+      - name: Validate Asset URL
+        run: |
+          if [ -z "${{ steps.fetch_asset.outputs.result }}" ]; then
+            echo "Error: Asset URL is empty. Ensure the release and asset name are correct."
+            exit 1
+          else
+            echo "Asset URL: ${{ steps.fetch_asset.outputs.result }}"
+          fi
 
       - name: Download Release Asset
         run: |
