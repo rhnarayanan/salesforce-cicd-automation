@@ -7,6 +7,9 @@ on:
         description: 'Target Environment (dev, test, prod)'
         required: true
         default: 'dev'
+      release:
+        description: 'Release to deploy (e.g., v1.0.0)'
+        required: true
 
 env:
   ASSET_NAME: salesforce-package
@@ -20,29 +23,36 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Fetch Latest Release Asset
+      - name: Fetch Release Asset URL
         id: fetch_asset
         uses: actions/github-script@v6
         with:
           script: |
             const { owner, repo } = context.repo;
+            const releaseName = '${{ github.event.inputs.release }}';
             const environment = '${{ github.event.inputs.environment }}';
             const assetName = '${{ env.ASSET_NAME }}-' + environment + '.zip';
 
-            // Get the latest release
-            const release = await github.rest.repos.getLatestRelease({
+            // Get the specified release by tag name
+            const releases = await github.rest.repos.listReleases({
               owner,
               repo
             });
 
-            // Find the matching asset
-            const asset = release.data.assets.find(a => a.name === assetName);
-            if (!asset) {
-              throw new Error(`No asset found with name ${assetName}`);
+            const release = releases.data.find(r => r.tag_name === releaseName);
+            if (!release) {
+              throw new Error(`Release with tag "${releaseName}" not found.`);
             }
 
-            // Download the asset URL
-            console.log(`Asset URL: ${asset.browser_download_url}`);
+            // Find the matching asset in the release
+            const asset = release.assets.find(a => a.name === assetName);
+            if (!asset) {
+              console.log('Available Assets:');
+              release.assets.forEach(a => console.log(`- ${a.name}`));
+              throw new Error(`No asset found with name "${assetName}" in release "${releaseName}".`);
+            }
+
+            console.log(`Found Asset: ${asset.name}`);
             return asset.browser_download_url;
 
       - name: Download Release Asset
@@ -55,6 +65,6 @@ jobs:
 
       - name: Deploy to ${{ github.event.inputs.environment }}
         run: |
-          echo "Deploying to ${{ github.event.inputs.environment }} environment..."
+          echo "Deploying release ${{ github.event.inputs.release }} to ${{ github.event.inputs.environment }} environment..."
           cat deployment/config.yaml
-          echo "Deployment successful for ${{ github.event.inputs.environment }}!"
+          echo "Deployment successful for ${{ github.event.inputs.environment }} using release ${{ github.event.inputs.release }}!"
