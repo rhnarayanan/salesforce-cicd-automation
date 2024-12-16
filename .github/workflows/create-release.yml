@@ -1,0 +1,56 @@
+name: Create Release for SalesforcePR
+
+on:
+  push:
+    branches:
+      - main  # Trigger when code is pushed to the main branch
+
+env:
+  ASSET_NAME: salesforce-package
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, test, prod]  # Build for all environments
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Load Configuration
+        id: config
+        uses: mikefarah/yq@v4
+        with:
+          cmd: yq eval '.apiUrl' configs/${{ matrix.environment }}.yaml
+
+      - name: Prepare Files for Archive
+        run: |
+          mkdir -p archive
+          cp configs/${{ matrix.environment }}.yaml archive/config.yaml
+          cp -r src archive/  # Include source code
+          echo "Environment: ${{ matrix.environment }}" > archive/README.txt
+          echo "API Key: $(yq eval '.apiKey' configs/${{ matrix.environment }}.yaml)" >> archive/README.txt
+          zip -r ${{ env.ASSET_NAME }}-${{ matrix.environment }}.zip ./archive
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v1.0.${{ github.run_number }}-${{ matrix.environment }}
+          release_name: Release v1.0.${{ github.run_number }} (${{ matrix.environment }})
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.ASSET_NAME }}-${{ matrix.environment }}.zip
+          asset_name: ${{ env.ASSET_NAME }}-${{ matrix.environment }}.zip
+          asset_content_type: application/zip
