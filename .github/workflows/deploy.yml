@@ -20,16 +20,35 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Download Release Asset
-        uses: dsaltares/fetch-gh-release-asset@v1
+      - name: Fetch Latest Release Asset
+        id: fetch_asset
+        uses: actions/github-script@v6
         with:
-          repo: ${{ github.repository }}
-          version: latest
-          file: ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const environment = '${{ github.event.inputs.environment }}';
+            const assetName = '${{ env.ASSET_NAME }}-' + environment + '.zip';
 
-      - name: Extract Release Files
+            // Get the latest release
+            const release = await github.rest.repos.getLatestRelease({
+              owner,
+              repo
+            });
+
+            // Find the matching asset
+            const asset = release.data.assets.find(a => a.name === assetName);
+            if (!asset) {
+              throw new Error(`No asset found with name ${assetName}`);
+            }
+
+            // Download the asset URL
+            console.log(`Asset URL: ${asset.browser_download_url}`);
+            return asset.browser_download_url;
+
+      - name: Download Release Asset
         run: |
+          echo "Downloading asset..."
+          curl -L -o ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip '${{ steps.fetch_asset.outputs.result }}'
           mkdir -p deployment
           unzip ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip -d deployment
           ls -la deployment
