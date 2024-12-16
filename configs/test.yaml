@@ -1,0 +1,5 @@
+environment: test
+apiUrl: https://test.api.example.com
+dbConnection: test-db-connection
+apiKey: TEST-12345-API-KEY
+version: 1.0.0

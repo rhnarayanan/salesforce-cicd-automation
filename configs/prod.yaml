@@ -1,0 +1,5 @@
+environment: prod
+apiUrl: https://prod.api.example.com
+dbConnection: prod-db-connection
+apiKey: PROD-12345-API-KEY
+version: 1.0.0

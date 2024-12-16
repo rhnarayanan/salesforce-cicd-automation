@@ -1,0 +1,5 @@
+environment: dev
+apiUrl: https://dev.api.example.com
+dbConnection: dev-db-connection
+apiKey: DEV-12345-API-KEY
+version: 1.0.0
