@@ -19,20 +19,39 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: Validate Configuration File
+        run: |
+          CONFIG_FILE="configs/${{ matrix.environment }}.yaml"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Error: Configuration file $CONFIG_FILE not found!"
+            exit 1
+          fi
+          echo "Found configuration file: $CONFIG_FILE"
+
       - name: Load Configuration
         id: config
-        uses: mikefarah/yq@v4
-        with:
-          cmd: yq eval '.apiUrl' configs/${{ matrix.environment }}.yaml
+        run: |
+          echo "Loading configuration for ${{ matrix.environment }}..."
+          API_URL=$(yq eval '.apiUrl' configs/${{ matrix.environment }}.yaml)
+          API_KEY=$(yq eval '.apiKey' configs/${{ matrix.environment }}.yaml)
+          echo "API_URL=${API_URL}" >> $GITHUB_ENV
+          echo "API_KEY=${API_KEY}" >> $GITHUB_ENV
 
       - name: Prepare Files for Archive
         run: |
+          echo "Preparing files for environment: ${{ matrix.environment }}..."
           mkdir -p archive
           cp configs/${{ matrix.environment }}.yaml archive/config.yaml
           cp -r src archive/  # Include source code
+          
+          # Add metadata to a README file
           echo "Environment: ${{ matrix.environment }}" > archive/README.txt
-          echo "API Key: $(yq eval '.apiKey' configs/${{ matrix.environment }}.yaml)" >> archive/README.txt
+          echo "API URL: ${API_URL}" >> archive/README.txt
+          echo "API Key: ${API_KEY}" >> archive/README.txt
+
+          # Create ZIP archive
           zip -r ${{ env.ASSET_NAME }}-${{ matrix.environment }}.zip ./archive
+          ls -lh ${{ env.ASSET_NAME }}-${{ matrix.environment }}.zip
 
       - name: Create Release
         id: create_release
