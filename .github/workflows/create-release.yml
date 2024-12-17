@@ -25,25 +25,21 @@ jobs:
         with:
           cmd: yq eval '.apiUrl' configs/${{ matrix.environment }}.yaml
 
-      - name: Prepare Files for Archive
+      - name: Prepare Environment-Specific Folder
         run: |
-          echo "Preparing files for environment: ${{ matrix.environment }}..."
+          ENV_FOLDER=${{ env.ASSET_NAME }}-${{ matrix.environment }}
+          mkdir -p $ENV_FOLDER
+          cp configs/${{ matrix.environment }}.yaml $ENV_FOLDER/config.yaml
+          cp -r src $ENV_FOLDER/src  # Include source code
+          echo "Environment: ${{ matrix.environment }}" > $ENV_FOLDER/README.txt
+          echo "API Key: $(yq eval '.apiKey' configs/${{ matrix.environment }}.yaml)" >> $ENV_FOLDER/README.txt
+          ls -R $ENV_FOLDER
 
-          # Create a staging directory named salesforce-package-dev
-          mkdir -p salesforce-package-dev
-
-          # Copy configuration file and src folder directly into salesforce-package-dev
-          cp configs/${{ matrix.environment }}.yaml salesforce-package-dev/config.yaml
-          cp -r src salesforce-package-dev/  # Include source code
-
-          # Add metadata to a README file
-          echo "Environment: ${{ matrix.environment }}" > salesforce-package-dev/README.txt
-          echo "API URL: $(yq eval '.apiUrl' configs/${{ matrix.environment }}.yaml)" >> salesforce-package-dev/README.txt
-          echo "API Key: $(yq eval '.apiKey' configs/${{ matrix.environment }}.yaml)" >> salesforce-package-dev/README.txt
-
-          # Archive the salesforce-package-dev folder
-          zip -r ${{ env.ASSET_NAME }}-${{ matrix.environment }}.zip salesforce-package-dev
-          ls -lh ${{ env.ASSET_NAME }}-${{ matrix.environment }}.zip
+      - name: Package Environment Artifacts
+        run: |
+          ENV_FOLDER=${{ env.ASSET_NAME }}-${{ matrix.environment }}
+          zip -r $ENV_FOLDER.zip $ENV_FOLDER
+          ls -lh $ENV_FOLDER.zip
 
       - name: Create Release
         id: create_release
