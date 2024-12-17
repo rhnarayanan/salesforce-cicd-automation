@@ -1,0 +1,133 @@
+name: Salesforce Automated Release Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Enter release type (patch, minor, major)'
+        required: true
+      environment:
+        description: 'Target environment (dev, st1, st2, prod)'
+        required: true
+      commits:
+        description: 'Comma-separated list of commit SHAs to cherry-pick (optional)'
+        required: false
+
+env:
+  ASSET_NAME: salesforce-package
+  DEV_BRANCH: dev
+  ST_BRANCH_PREFIX: st
+  PROD_BRANCH: main
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Action Bot"
+          git config --global user.email "action@github.com"
+
+      - name: Generate Release Tag
+        id: generate_tag
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 || echo "0.0.0")
+          case "${{ inputs.release_type }}" in
+            patch) VERSION=$(echo $LAST_TAG | awk -F. '{print $1 "." $2 "." $3+1}') ;;
+            minor) VERSION=$(echo $LAST_TAG | awk -F. '{print $1 "." $2+1 ".0"}') ;;
+            major) VERSION=$(echo $LAST_TAG | awk -F. '{print $1+1 ".0.0"}') ;;
+            *) echo "Invalid release type"; exit 1 ;;
+          esac
+          echo "Generated Release Tag: $VERSION"
+          echo "RELEASE_TAG=$VERSION" >> $GITHUB_ENV
+
+      - name: Determine Target Branch
+        run: |
+          case "${{ inputs.environment }}" in
+            dev) BRANCH="${{ env.DEV_BRANCH }}" ;;
+            st*) BRANCH="${{ inputs.environment }}" ;;
+            prod) BRANCH="${{ env.PROD_BRANCH }}" ;;
+            *) echo "Invalid environment"; exit 1 ;;
+          esac
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+
+      - name: Checkout or Create Target Branch
+        run: |
+          BRANCH=${{ env.BRANCH }}
+          if git show-ref --verify --quiet refs/heads/$BRANCH; then
+            git checkout $BRANCH
+          else
+            git checkout -b $BRANCH --track origin/$BRANCH || git checkout -b $BRANCH
+          fi
+
+      - name: Cherry-Pick Commits
+        if: inputs.commits != ''
+        run: |
+          for COMMIT in $(echo "${{ inputs.commits }}" | tr ',' ' '); do
+            git cherry-pick $COMMIT || (
+              echo "Skipping commit $COMMIT due to conflicts" &&
+              git cherry-pick --skip
+            )
+          done
+          git push origin $BRANCH
+
+      - name: Prepare Environment-Specific Artifacts
+        run: |
+          ENV_FOLDER=${{ env.ASSET_NAME }}-${{ inputs.environment }}
+          mkdir -p $ENV_FOLDER
+          
+          # Copy configuration
+          cp configs/${{ inputs.environment }}.yaml $ENV_FOLDER/config.yaml
+
+          # Copy source files
+          cp -r src/* $ENV_FOLDER/
+          cp src/app.py $ENV_FOLDER/  # Ensure app.py is included
+
+          # Metadata
+          echo "Environment: ${{ inputs.environment }}" > $ENV_FOLDER/README.txt
+          echo "Generated Release: ${{ env.RELEASE_TAG }}" >> $ENV_FOLDER/README.txt
+
+          echo "Contents of $ENV_FOLDER:"
+          ls -R $ENV_FOLDER
+
+      - name: Package Environment Artifacts
+        run: |
+          ENV_FOLDER=${{ env.ASSET_NAME }}-${{ inputs.environment }}
+          echo "Zipping $ENV_FOLDER..."
+          cd $ENV_FOLDER
+          zip -r ../$ENV_FOLDER.zip .
+          cd ..
+          ls -lh $ENV_FOLDER.zip
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          release_name: Release ${{ env.RELEASE_TAG }} for ${{ inputs.environment }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.ASSET_NAME }}-${{ inputs.environment }}.zip
+          asset_name: ${{ env.ASSET_NAME }}-${{ inputs.environment }}.zip
+          asset_content_type: application/zip
+
+      - name: Simulate Deployment
+        run: |
+          echo "Deploying to environment: ${{ inputs.environment }}"
+          echo "Artifact path: ./${{ env.ASSET_NAME }}-${{ inputs.environment }}.zip"
+          echo "Deployment complete!"
