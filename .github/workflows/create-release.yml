@@ -25,20 +25,27 @@ jobs:
         with:
           cmd: yq eval '.apiUrl' configs/${{ matrix.environment }}.yaml
 
-      - name: Prepare Environment-Specific Folder
+      - name: Prepare Environment-Specific Artifacts
         run: |
+          # Set the environment folder name
           ENV_FOLDER=${{ env.ASSET_NAME }}-${{ matrix.environment }}
           mkdir -p $ENV_FOLDER
+
+          # Copy files and directories without nesting
           cp configs/${{ matrix.environment }}.yaml $ENV_FOLDER/config.yaml
-          cp -r src $ENV_FOLDER/src  # Include source code
+          cp -r src/* $ENV_FOLDER/  # Copy the contents of src only
           echo "Environment: ${{ matrix.environment }}" > $ENV_FOLDER/README.txt
           echo "API Key: $(yq eval '.apiKey' configs/${{ matrix.environment }}.yaml)" >> $ENV_FOLDER/README.txt
+          
+          # Check the folder structure
           ls -R $ENV_FOLDER
 
       - name: Package Environment Artifacts
         run: |
           ENV_FOLDER=${{ env.ASSET_NAME }}-${{ matrix.environment }}
-          zip -r $ENV_FOLDER.zip $ENV_FOLDER
+          cd $ENV_FOLDER
+          zip -r ../$ENV_FOLDER.zip .  # Zip contents directly without nesting
+          cd ..
           ls -lh $ENV_FOLDER.zip
 
       - name: Create Release
