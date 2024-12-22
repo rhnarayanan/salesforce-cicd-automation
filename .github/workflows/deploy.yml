@@ -33,7 +33,6 @@ jobs:
             const environment = '${{ github.event.inputs.environment }}';
             const assetName = '${{ env.ASSET_NAME }}-' + environment + '.zip';
 
-            // Get the specified release by tag name
             const releases = await github.rest.repos.listReleases({
               owner,
               repo
@@ -48,10 +47,9 @@ jobs:
 
             console.log(`Found Release: ${release.tag_name}`);
 
-            // Find the matching asset in the release
             const asset = release.assets.find(a => a.name === assetName);
             if (!asset) {
-              console.log('Available Assets:');
+              console.log('Available Assets in Release:');
               release.assets.forEach(a => console.log(`- ${a.name}`));
               throw new Error(`No asset found with name "${assetName}" in release "${releaseName}".`);
             }
@@ -80,11 +78,12 @@ jobs:
 
           echo "Inspecting file content..."
           file ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip
+          echo "Contents of the downloaded file:"
+          cat ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip
 
           echo "Checking ZIP integrity..."
           if ! unzip -tq ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip; then
             echo "Error: The downloaded file is not a valid ZIP archive."
-            cat ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip
             exit 1
           fi
 
