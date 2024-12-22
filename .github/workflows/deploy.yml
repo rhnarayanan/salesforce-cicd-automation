@@ -78,8 +78,13 @@ jobs:
             exit 1
           fi
 
+          echo "Inspecting file content..."
+          file ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip
+
+          echo "Checking ZIP integrity..."
           if ! unzip -tq ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip; then
             echo "Error: The downloaded file is not a valid ZIP archive."
+            cat ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip
             exit 1
           fi
 
