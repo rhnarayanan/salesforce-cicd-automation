@@ -60,22 +60,30 @@ jobs:
             console.log(`Asset URL: ${asset.browser_download_url}`);
             return asset.browser_download_url;
 
-      - name: Validate Asset URL
+      - name: Debug Asset URL
         run: |
-          echo "Validating asset URL..."
-          if [ -z "${{ steps.fetch_asset.outputs.result }}" ]; then
-            echo "Error: Asset URL is empty. Ensure the release and asset name are correct."
-            exit 1
-          else
-            echo "Asset URL: ${{ steps.fetch_asset.outputs.result }}"
-          fi
+          echo "Asset URL: ${{ steps.fetch_asset.outputs.result }}"
+          curl -I ${{ steps.fetch_asset.outputs.result }}
 
       - name: Download Release Asset
         run: |
           echo "Downloading asset..."
-          curl -L -o ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip ${{
-            steps.fetch_asset.outputs.result
-          }}
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -o ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip \
+            ${{ steps.fetch_asset.outputs.result }}
+
+          echo "Validating downloaded file..."
+          if [ ! -s ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip ]; then
+            echo "Error: Downloaded file is empty or missing."
+            exit 1
+          fi
+
+          if ! unzip -tq ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip; then
+            echo "Error: The downloaded file is not a valid ZIP archive."
+            exit 1
+          fi
+
+          echo "Unzipping asset..."
           mkdir -p deployment
           unzip ${{ env.ASSET_NAME }}-${{ github.event.inputs.environment }}.zip -d deployment
           ls -la deployment
