@@ -1,0 +1,70 @@
+name: SFDX Metadata Deployment Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment (sandbox or production)'
+        required: true
+        default: 'sandbox'
+      deploy_folder:
+        description: 'Path to the folder containing metadata (relative to the repo root)'
+        required: true
+        default: 'src'
+
+env:
+  SFDX_AUTH_URL: ${{ secrets.SFDX_AUTH_URL }}
+  CLIENT_ID: ${{ secrets.SFDX_CLIENT_ID }}
+  PRIVATE_KEY: ${{ secrets.SFDX_PRIVATE_KEY }}
+  USERNAME: ${{ secrets.SFDX_USERNAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Install Salesforce CLI
+      - name: Install Salesforce CLI
+        run: |
+          echo "Installing Salesforce CLI..."
+          curl -sL https://developer.salesforce.com/media/salesforce-cli/sfdx-linux-amd64.tar.xz | tar -xJ
+          ./sfdx/install
+
+      # Authenticate to Salesforce
+      - name: Authenticate with Salesforce Org
+        run: |
+          echo "${{ env.PRIVATE_KEY }}" > server.key
+          sfdx auth:jwt:grant \
+            --clientid ${{ env.CLIENT_ID }} \
+            --jwtkeyfile server.key \
+            --username ${{ env.USERNAME }} \
+            --instanceurl https://login.salesforce.com \
+            --setalias TargetOrg
+        env:
+          PRIVATE_KEY: ${{ secrets.SFDX_PRIVATE_KEY }}
+
+      # Validate Metadata Deployment
+      - name: Validate Metadata Deployment
+        run: |
+          sfdx force:source:deploy \
+            --sourcepath ${{ github.event.inputs.deploy_folder }} \
+            --targetusername TargetOrg \
+            --checkonly \
+            --testlevel RunLocalTests
+
+      # Deploy Metadata
+      - name: Deploy Metadata
+        run: |
+          sfdx force:source:deploy \
+            --sourcepath ${{ github.event.inputs.deploy_folder }} \
+            --targetusername TargetOrg \
+            --testlevel RunLocalTests
+
+      # Deployment Confirmation
+      - name: Confirm Deployment
+        run: |
+          echo "Metadata successfully deployed to ${{ github.event.inputs.environment }}!"
